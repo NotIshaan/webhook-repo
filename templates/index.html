@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Events Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            font-weight: 500;
+        }
+        
+        .status.loading {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f1c2c7;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .events-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .event {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s ease;
+            position: relative;
+            padding-left: 60px;
+        }
+        
+        .event:last-child {
+            border-bottom: none;
+        }
+        
+        .event:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .event::before {
+            content: '';
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #28a745;
+        }
+        
+        .event.push::before {
+            background-color: #007bff;
+        }
+        
+        .event.pull_request::before {
+            background-color: #ffc107;
+        }
+        
+        .event.merge::before {
+            background-color: #28a745;
+        }
+        
+        .event-text {
+            font-size: 1.1em;
+            color: #333;
+            margin: 0;
+        }
+        
+        .event-time {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .no-events {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+            font-size: 1.2em;
+        }
+        
+        .last-updated {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .loading-animation {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>GitHub Events Dashboard</h1>
+        <p>Real-time monitoring of repository activities</p>
+    </div>
+    
+    <div id="status" class="status loading">Loading events...</div>
+    
+    <div class="events-container">
+        <div id="events">
+            <div class="no-events loading-animation">
+                Fetching latest events...
+            </div>
+        </div>
+    </div>
+    
+    <div class="last-updated" id="lastUpdated"></div>
+
+    <script>
+        let isLoading = false;
+        
+        function updateStatus(message, type = 'loading') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+        
+        function updateLastUpdated() {
+            const lastUpdatedEl = document.getElementById('lastUpdated');
+            lastUpdatedEl.textContent = `Last updated: ${new Date().toLocaleString()}`;
+        }
+        
+        function formatEventMessage(event) {
+            const timeStr = new Date(event.timestamp).toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'UTC',
+                timeZoneName: 'short'
+            });
+            
+            let message = '';
+            
+            if (event.type === 'push') {
+                message = `${event.author} pushed to "${event.to_branch}"`;
+            } else if (event.type === 'pull_request') {
+                message = `${event.author} submitted a pull request from "${event.from_branch}" to "${event.to_branch}"`;
+            } else if (event.type === 'merge') {
+                message = `${event.author} merged branch "${event.from_branch}" to "${event.to_branch}"`;
+            } else {
+                message = `Unknown event type "${event.type}"`;
+            }
+            
+            return { message, timeStr };
+        }
+        
+        async function fetchEvents() {
+            if (isLoading) return;
+            
+            isLoading = true;
+            updateStatus('Fetching events...', 'loading');
+            
+            try {
+                const response = await fetch('/events');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const events = await response.json();
+                console.log('Fetched events:', events);
+                
+                const container = document.getElementById('events');
+                container.innerHTML = '';
+                
+                if (events.length === 0) {
+                    container.innerHTML = '<div class="no-events">No events found. Push some code or create a pull request to see activity!</div>';
+                    updateStatus('No events found', 'success');
+                } else {
+                    events.forEach(event => {
+                        const { message, timeStr } = formatEventMessage(event);
+                        
+                        const eventDiv = document.createElement('div');
+                        eventDiv.className = `event ${event.type}`;
+                        
+                        eventDiv.innerHTML = `
+                            <div class="event-text">${message}</div>
+                            <div class="event-time">${timeStr}</div>
+                        `;
+                        
+                        container.appendChild(eventDiv);
+                    });
+                    
+                    updateStatus(`${events.length} events loaded`, 'success');
+                }
+                
+                updateLastUpdated();
+                
+            } catch (error) {
+                console.error('Failed to fetch events:', error);
+                
+                const container = document.getElementById('events');
+                container.innerHTML = `
+                    <div class="no-events">
+                        Failed to load events. Please check your connection and try again.
+                        <br><br>
+                        <small>Error: ${error.message}</small>
+                    </div>
+                `;
+                
+                updateStatus('Failed to load events', 'error');
+            } finally {
+                isLoading = false;
+            }
+        }
+        
+        // Initial fetch
+        fetchEvents();
+        
+        // Fetch every 15 seconds as required
+        setInterval(fetchEvents, 15000);
+        
+        // Also fetch when page becomes visible again
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                fetchEvents();
+            }
+        });
+    </script>
+</body>
+</html>
