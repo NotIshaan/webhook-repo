@@ -10,6 +10,9 @@ This Flask application receives GitHub webhooks and displays repository activity
 - Clean, minimal UI design
 - Proper error handling and logging
 
+## Resulting UI
+![image](https://github.com/user-attachments/assets/36e1684f-ab89-4334-9e24-1ee52152a1cf)
+
 ## Setup Instructions
 
 ### Prerequisites
